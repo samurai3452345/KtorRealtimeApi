@@ -1,0 +1,54 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: realtime_test
+          POSTGRES_USER: realtime_test
+          POSTGRES_PASSWORD: ci-integration-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U realtime_test -d realtime_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      TEST_DATABASE_URL: jdbc:postgresql://localhost:5432/realtime_test
+      TEST_DATABASE_USER: realtime_test
+      TEST_DATABASE_PASSWORD: ci-integration-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Verify application
+        run: bash ./mvnw -B -ntp verify
+      - name: Generate isolated Docker settings
+        run: bash scripts/init-env.sh
+      - name: Start application in Docker
+        run: docker compose up --build --detach --wait --wait-timeout 180
+      - name: Verify Docker HTTP endpoints
+        run: |
+          curl --fail --silent --show-error http://localhost:8091/health/ready
+          curl --fail --silent --show-error http://localhost:8091/swagger --output /dev/null
+          curl --fail --silent --show-error http://localhost:8091/openapi.yaml --output /dev/null
+      - name: Show Docker logs on failure
+        if: failure()
+        run: docker compose logs --tail 100
+      - name: Remove disposable CI containers and volumes
+        if: always()
+        run: docker compose down --volumes --remove-orphans

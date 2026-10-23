@@ -1,0 +1,597 @@
+openapi: 3.0.3
+info:
+  title: КТ 4 — Ktor Realtime API
+  version: 1.0.0
+  description: |
+    REST API с PostgreSQL, JWT и ролями admin/user. Регистрация создаёт только user.
+    Роль читается из БД при обращении к защищённым маршрутам.
+
+    WebSocket: ws://localhost:8091/ws — чат и личные оповещения в одном соединении.
+    В течение 5 секунд после подключения отправьте текстовый кадр
+    {"type":"auth","token":"<accessToken>"}. JWT в URL не передаётся.
+    После события ready чат принимает {"type":"message","text":"Привет!"}.
+    Серверные события: ready, message, notification, error.
+    HTTP bearer-схема ниже относится к REST; Swagger UI не является WebSocket-клиентом.
+    Формат событий и пример клиента описаны в docs/API.md репозитория.
+servers:
+  - url: /
+    description: Текущий сервер
+tags:
+  - name: Public
+    description: Интерфейс и документация
+  - name: Health
+    description: Проверки процесса и базы данных
+  - name: Auth
+    description: Регистрация и получение JWT
+  - name: Users
+    description: Текущий пользователь
+  - name: Chat
+    description: Сохранённые сообщения и публикация в WebSocket
+  - name: Notifications
+    description: Собственные оповещения
+  - name: Admin
+    description: Требуется текущая роль admin в PostgreSQL
+security:
+  - bearerAuth: []
+paths:
+  /:
+    get:
+      tags: [Public]
+      summary: Браузерный интерфейс демонстрации
+      operationId: index
+      security: []
+      responses:
+        '200':
+          description: HTML-приложение для регистрации, чата и оповещений
+          content:
+            text/html:
+              schema:
+                type: string
+  /swagger:
+    get:
+      tags: [Public]
+      summary: Swagger UI
+      operationId: swaggerUi
+      security: []
+      responses:
+        '200':
+          description: HTML-интерфейс с локальными ресурсами Swagger UI
+          content:
+            text/html:
+              schema:
+                type: string
+  /openapi.yaml:
+    get:
+      tags: [Public]
+      summary: Спецификация OpenAPI
+      operationId: openApiDocument
+      security: []
+      responses:
+        '200':
+          description: Этот YAML-документ
+          content:
+            application/yaml:
+              schema:
+                type: string
+  /health/live:
+    get:
+      tags: [Health]
+      summary: Проверка работающего процесса
+      operationId: liveness
+      security: []
+      responses:
+        '200':
+          description: Процесс отвечает
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Проверка подключения к PostgreSQL
+      operationId: readiness
+      security: []
+      responses:
+        '200':
+          description: Приложение и БД готовы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: БД недоступна; приложение не готово к запросам
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Зарегистрировать пользователя с ролью user
+      operationId: register
+      security: []
+      description: Имя нормализуется в нижний регистр; роль передать при регистрации нельзя.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+      responses:
+        '201':
+          description: Пользователь создан и авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Войти и получить JWT
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/users/me:
+    get:
+      tags: [Users]
+      summary: Получить текущего пользователя
+      operationId: currentUser
+      responses:
+        '200':
+          description: Текущий профиль и актуальная роль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/messages:
+    get:
+      tags: [Chat]
+      summary: Получить историю чата от новых сообщений к старым
+      operationId: listMessages
+      parameters:
+        - name: limit
+          in: query
+          description: Максимальное количество сообщений
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: before
+          in: query
+          description: Вернуть сообщения с ID меньше этого значения; ID последнего элемента предыдущей страницы
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        '200':
+          description: Массив сообщений; может быть пустым
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatMessage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags: [Chat]
+      summary: Сохранить сообщение и опубликовать его в WebSocket-чате
+      operationId: createMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMessageRequest'
+      responses:
+        '201':
+          description: Сообщение сохранено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/notifications:
+    get:
+      tags: [Notifications]
+      summary: Получить только собственные оповещения
+      operationId: listNotifications
+      parameters:
+        - $ref: '#/components/parameters/StandardLimit'
+      responses:
+        '200':
+          description: Оповещения пользователя от новых к старым
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/notifications/{id}/read:
+    patch:
+      tags: [Notifications]
+      summary: Пометить собственное оповещение прочитанным
+      operationId: markNotificationRead
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Оповещение с read=true; повторный запрос допустим
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/admin/users:
+    get:
+      tags: [Admin]
+      summary: Получить пользователей с пагинацией
+      operationId: listUsers
+      parameters:
+        - $ref: '#/components/parameters/StandardLimit'
+        - name: offset
+          in: query
+          description: Количество пропускаемых записей
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Массив пользователей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/admin/users/{id}/role:
+    patch:
+      tags: [Admin]
+      summary: Изменить роль пользователя
+      description: Администратор не может снять собственную роль admin (403).
+      operationId: changeUserRole
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeRoleRequest'
+      responses:
+        '200':
+          description: Пользователь с изменённой ролью
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/admin/notifications:
+    post:
+      tags: [Admin]
+      summary: Создать адресное или общее оповещение
+      operationId: createNotifications
+      description: |
+        Если userId задан, запись создаётся только этому пользователю.
+        Если userId отсутствует или null, запись создаётся каждому существующему пользователю.
+        Подключённые получатели дополнительно получают событие notification в /ws.
+        delivered — количество сохранённых записей, а не число подключённых WebSocket.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNotificationRequest'
+      responses:
+        '201':
+          description: Оповещения сохранены и опубликованы подключённым получателям
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Получите accessToken через /api/auth/login или /api/auth/register. Введите сам JWT без слова Bearer.
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      description: Положительный идентификатор записи
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    StandardLimit:
+      name: limit
+      in: query
+      description: Максимальное количество элементов
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 100
+  responses:
+    BadRequest:
+      description: Некорректный JSON, нарушены ограничения или неверный параметр запроса
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Unauthorized:
+      description: Неверные учётные данные либо отсутствующий, недействительный или истёкший JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Forbidden:
+      description: Недостаточно прав либо попытка снять собственную роль администратора
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    NotFound:
+      description: Запись отсутствует или не принадлежит текущему пользователю
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Conflict:
+      description: Имя пользователя уже занято
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    ServerError:
+      description: Внутренняя ошибка; подробности сервера клиенту не выдаются
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+  schemas:
+    Role:
+      type: string
+      enum: [admin, user]
+      example: user
+    AuthRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: '^[A-Za-z0-9_]{3,32}$'
+          example: student_demo
+        password:
+          type: string
+          format: password
+          minLength: 10
+          maxLength: 128
+          example: StudentDemoPass123!
+    User:
+      type: object
+      required: [id, username, role, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 2
+        username:
+          type: string
+          example: student_demo
+        role:
+          $ref: '#/components/schemas/Role'
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-10-23T07:00:00Z'
+    TokenResponse:
+      type: object
+      required: [accessToken, tokenType, expiresIn, user]
+      properties:
+        accessToken:
+          type: string
+          description: Подписанный JWT; обращайтесь с ним как с паролем
+        tokenType:
+          type: string
+          enum: [Bearer]
+        expiresIn:
+          type: integer
+          format: int64
+          description: Время действия токена в секундах
+          example: 3600
+        user:
+          $ref: '#/components/schemas/User'
+    CreateMessageRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          example: Привет из Ktor!
+    ChatMessage:
+      type: object
+      required: [id, userId, username, text, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        userId:
+          type: integer
+          format: int64
+          example: 2
+        username:
+          type: string
+          example: student_demo
+        text:
+          type: string
+          example: Привет из Ktor!
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-10-23T07:00:00Z'
+    Notification:
+      type: object
+      required: [id, userId, title, message, read, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        userId:
+          type: integer
+          format: int64
+          example: 2
+        title:
+          type: string
+          example: КТ 4
+        message:
+          type: string
+          example: Начало занятия
+        read:
+          type: boolean
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-10-23T07:00:00Z'
+    ChangeRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: '#/components/schemas/Role'
+    CreateNotificationRequest:
+      type: object
+      required: [title, message]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: КТ 4
+        message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          example: Начало занятия
+        userId:
+          type: integer
+          format: int64
+          nullable: true
+          minimum: 1
+          description: ID получателя; null или отсутствие поля — всем пользователям
+          example: null
+    DeliveryResult:
+      type: object
+      required: [delivered]
+      properties:
+        delivered:
+          type: integer
+          minimum: 0
+          example: 2
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: Invalid request

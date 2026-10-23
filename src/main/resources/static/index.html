@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#101019">
+  <title>Relay · Чат и оповещения</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="ambient" aria-hidden="true"></div>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+
+  <main id="auth-view" class="auth-layout">
+    <section class="auth-intro">
+      <a class="brand" href="/" aria-label="Relay, главная"><span class="brand-symbol" aria-hidden="true">r</span>relay<span class="brand-dot">.</span></a>
+      <div class="intro-copy"><p class="eyebrow"><span class="live-dot"></span> КОНТРОЛЬНАЯ ТОЧКА 04</p><h1>Всё начинается<br>с <span>сообщения.</span></h1><p class="intro-description">Общий чат, личные оповещения и управление командой — в одном пространстве.</p></div>
+      <div class="preview-card" aria-hidden="true"><div class="preview-top"><span class="mini-avatar">R</span><div><strong>Рабочее пространство</strong><small>Связь установлена</small></div><span class="preview-status">LIVE</span></div><div class="preview-message">Одна команда. Один диалог.<span>Сообщения доставляются в реальном времени ↗</span></div><div class="preview-bottom"><i></i><i></i><i></i><span>Все на связи</span></div></div>
+      <div class="intro-footer"><span>Kotlin + Ktor</span><span>PostgreSQL</span><span>WebSocket</span></div>
+    </section>
+    <section class="auth-side">
+      <div class="auth-card"><p class="eyebrow muted">ДОБРО ПОЖАЛОВАТЬ</p><h2 id="auth-heading">С возвращением</h2><p id="auth-description" class="secondary">Войдите, чтобы присоединиться к разговору.</p>
+        <div class="auth-tabs" role="tablist" aria-label="Вход или регистрация"><button id="login-tab" type="button" role="tab" aria-selected="true">Вход</button><button id="register-tab" type="button" role="tab" aria-selected="false">Регистрация</button></div>
+        <form id="auth-form"><label for="username">Имя пользователя</label><input id="username" name="username" autocomplete="username" placeholder="Ваш логин" minlength="3" maxlength="32" required pattern="[A-Za-z0-9_]{3,32}" title="От 3 до 32 латинских букв, цифр или символов _"><label for="password">Пароль</label><div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" placeholder="Не менее 10 символов" minlength="10" maxlength="128" required><button id="password-toggle" type="button" aria-label="Показать пароль">Показать</button></div><p id="auth-error" class="form-error" role="alert" hidden></p><button id="auth-submit" class="button primary wide" type="submit">Войти в пространство <span aria-hidden="true">↗</span></button></form>
+        <p class="auth-note">При регистрации создаётся аккаунт с ролью <strong>user</strong>. Администратор управляет доступом участников.</p>
+      </div>
+      <a class="documentation-link" href="/swagger" target="_blank" rel="noopener">Изучить документацию API <span aria-hidden="true">↗</span></a>
+    </section>
+  </main>
+
+  <div id="workspace" class="workspace" hidden>
+    <aside class="sidebar"><a class="brand" href="/" aria-label="Relay, главная"><span class="brand-symbol" aria-hidden="true">r</span>relay<span class="brand-dot">.</span></a><p class="nav-label">ПРОСТРАНСТВО</p><nav aria-label="Основная навигация"><button id="chat-nav" class="nav-item active" type="button"><span class="nav-icon" aria-hidden="true">◫</span> Общий чат<span class="nav-live"></span></button><button id="notifications-nav" class="nav-item" type="button"><span class="nav-icon" aria-hidden="true">♧</span> Оповещения<span id="nav-unread" class="count-badge" hidden>0</span></button><button id="admin-nav" class="nav-item" type="button" hidden><span class="nav-icon" aria-hidden="true">⊞</span> Управление</button></nav><div class="sidebar-bottom"><a class="nav-item" href="/swagger" target="_blank" rel="noopener"><span class="nav-icon" aria-hidden="true">⌘</span> Swagger API <span class="external-arrow" aria-hidden="true">↗</span></a><div class="profile"><span id="profile-avatar" class="avatar">?</span><div class="profile-details"><strong id="profile-name"></strong><span id="profile-role" class="role-badge"></span></div><button id="logout" type="button" title="Выйти" aria-label="Выйти из аккаунта">↪</button></div></div></aside>
+    <main class="main-content"><header class="topbar"><div><span class="breadcrumb">Пространство</span><span class="breadcrumb-divider">/</span><span id="page-label">Общий чат</span></div><span id="connection" class="connection connecting"><i></i><span>Подключение</span></span></header>
+      <section class="page-heading"><div><p class="eyebrow muted">STAY CONNECTED</p><h1 id="page-heading">На одной волне<span class="heading-dot">.</span></h1><p id="page-description" class="secondary">Разговоры, которые объединяют команду.</p></div><span class="project-tag">КТ 04 <span>↗</span></span></section>
+
+      <section id="chat-panel" class="content-grid"><article class="panel chat-panel"><div class="panel-header"><div class="panel-title"><span class="channel-icon">#</span><div><h2>Общий канал</h2><p>Открыт для всех участников</p></div></div><span class="small-chip">WebSocket</span></div><button id="older-messages" class="load-more" type="button" hidden>Загрузить предыдущие сообщения</button><div id="messages" class="messages" role="log" aria-label="Сообщения общего чата" aria-live="polite"><div class="empty-state"><span aria-hidden="true">↗</span><h3>Разговор начинается здесь</h3><p>Отправьте первое сообщение команде.</p></div></div><form id="message-form" class="composer"><label for="message-text" class="sr-only">Ваше сообщение</label><textarea id="message-text" name="text" rows="1" maxlength="2000" placeholder="Напишите сообщение…" required></textarea><button id="send-message" class="send-button" type="submit" aria-label="Отправить сообщение" disabled>↗</button><div class="composer-hint"><span>Enter — отправить · Shift + Enter — новая строка</span><span id="message-counter">0 / 2000</span></div></form></article>
+        <aside class="right-column"><article class="panel notice-panel"><div class="panel-header"><div class="panel-title"><span class="notice-symbol" aria-hidden="true">✳</span><h2>Для вас</h2></div><span id="unread-total" class="small-chip">0 новых</span></div><div id="notification-preview" class="notification-list compact"></div><button id="all-notifications" class="text-button" type="button">Все оповещения <span aria-hidden="true">→</span></button></article><article class="about-card"><span class="about-orbit" aria-hidden="true">◎</span><p class="eyebrow">ВСЕГДА НА СВЯЗИ</p><h3>Ближе, чем кажется.</h3><p>Сообщения и оповещения появляются здесь сразу. История сохраняется между сеансами.</p><div class="tech-pills"><span>JWT</span><span>Ktor</span><span>PostgreSQL</span></div></article></aside>
+      </section>
+
+      <section id="notifications-panel" class="panel full-panel" hidden><div class="panel-header"><div class="panel-title"><span class="notice-symbol" aria-hidden="true">✳</span><h2>Личные оповещения</h2></div><button id="refresh-notifications" class="button subtle" type="button">Обновить ↻</button></div><div id="notification-full-list" class="notification-list full"></div></section>
+
+      <section id="admin-panel" class="admin-grid" hidden><article class="panel"><div class="panel-header"><div class="panel-title"><span class="channel-icon" aria-hidden="true">⊞</span><h2>Участники</h2></div><button id="refresh-users" class="button subtle" type="button">Обновить ↻</button></div><div class="table-scroll"><table><thead><tr><th>Пользователь</th><th>Роль</th><th>Регистрация</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody id="users-list"></tbody></table></div><div class="pagination"><button id="previous-users" class="button subtle" type="button" disabled>← Назад</button><span id="users-page">Страница 1</span><button id="next-users" class="button subtle" type="button">Далее →</button></div></article><article class="panel send-notice-panel"><div class="panel-header"><div class="panel-title"><span class="notice-symbol" aria-hidden="true">↗</span><h2>Новое оповещение</h2></div></div><form id="notification-form" class="stack-form"><label for="notification-target">Получатель</label><select id="notification-target" name="target"><option value="">Все участники</option></select><label for="notification-title">Заголовок</label><input id="notification-title" name="title" maxlength="100" placeholder="Например, важное обновление" required><label for="notification-body">Сообщение</label><textarea id="notification-body" name="message" rows="5" maxlength="2000" placeholder="Что нужно знать команде?" required></textarea><p class="secondary form-note">Получатели увидят оповещение сразу, если они онлайн, или при следующем входе.</p><button class="button primary wide" type="submit">Отправить оповещение <span aria-hidden="true">↗</span></button></form></article></section>
+      <footer class="workspace-footer"><span>RELAY / КОНТРОЛЬНАЯ ТОЧКА 04</span><span>Kotlin · Ktor · PostgreSQL</span></footer>
+    </main>
+  </div>
+</body>
+</html>

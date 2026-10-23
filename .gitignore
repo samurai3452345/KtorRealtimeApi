@@ -1,0 +1,21 @@
+# Local credentials
+.env
+.env.*
+!.env.example
+.local/
+
+# Maven and IntelliJ IDEA
+target/
+.idea/
+*.iml
+*.iws
+out/
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
+
+# HTTP Client local state (tokens/passwords)
+.http-client/
+http-client.private.env.json

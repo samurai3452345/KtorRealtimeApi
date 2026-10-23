@@ -1,0 +1,140 @@
+@baseUrl = http://localhost:8091
+@username = student_demo
+@password = StudentDemoPass123!
+
+### 1. Health: 200
+GET {{baseUrl}}/health/live
+
+### 2. Database readiness: 200 (503 if unavailable)
+GET {{baseUrl}}/health/ready
+
+### 3. Register: 201, repeated username: 409
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{"username":"{{username}}","password":"{{password}}"}
+
+> {%
+if (response.status === 201) {
+  client.global.set("userToken", response.body.accessToken);
+  client.global.set("userId", response.body.user.id);
+}
+%}
+
+### 4. Login: 200. Run this if the account already exists.
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{"username":"{{username}}","password":"{{password}}"}
+
+> {%
+if (response.status === 200) {
+  client.global.set("userToken", response.body.accessToken);
+  client.global.set("userId", response.body.user.id);
+}
+%}
+
+### 5. Profile: 200
+GET {{baseUrl}}/api/users/me
+Authorization: Bearer {{userToken}}
+
+### 6. Create message: 201, also delivered to connected chat clients
+POST {{baseUrl}}/api/messages
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{"text":"Привет! Сообщение из IntelliJ HTTP Client."}
+
+### 7. Message history: 200
+GET {{baseUrl}}/api/messages?limit=50
+Authorization: Bearer {{userToken}}
+
+### 8. Own notifications: 200. Saves first notification ID if present.
+GET {{baseUrl}}/api/notifications?limit=100
+Authorization: Bearer {{userToken}}
+
+> {%
+if (response.status === 200 && response.body.length > 0) {
+  client.global.set("notificationId", response.body[0].id);
+}
+%}
+
+### 9. Mark own notification read: 200. Run after admin sent a notification and request 8.
+PATCH {{baseUrl}}/api/notifications/{{notificationId}}/read
+Authorization: Bearer {{userToken}}
+
+### 10. Missing JWT: 401
+GET {{baseUrl}}/api/users/me
+
+### 11. User cannot list users: 403 (unless this user's role was changed)
+GET {{baseUrl}}/api/admin/users
+Authorization: Bearer {{userToken}}
+
+### 12. Invalid message: 400
+POST {{baseUrl}}/api/messages
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{"text":"   "}
+
+### 13. Invalid pagination: 400
+GET {{baseUrl}}/api/messages?limit=201
+Authorization: Bearer {{userToken}}
+
+### 14. Invalid password: 401
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{"username":"{{username}}","password":"IncorrectPassword123!"}
+
+### 15. Admin login. Set adminUsername/adminPassword in ignored http-client.private.env.json.
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{"username":"{{adminUsername}}","password":"{{adminPassword}}"}
+
+> {%
+if (response.status === 200) {
+  client.global.set("adminToken", response.body.accessToken);
+  client.global.set("adminId", response.body.user.id);
+}
+%}
+
+### 16. Admin users: 200
+GET {{baseUrl}}/api/admin/users?limit=100&offset=0
+Authorization: Bearer {{adminToken}}
+
+### 17. Personal notification: 201, delivered counts persisted recipients
+POST {{baseUrl}}/api/admin/notifications
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{"title":"КТ 4","message":"Персональное оповещение из API","userId":{{userId}}}
+
+### 18. Broadcast: 201
+POST {{baseUrl}}/api/admin/notifications
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{"title":"Объявление","message":"Оповещение всем пользователям","userId":null}
+
+### 19. Grant admin role: 200 (changes permissions of the demo account)
+PATCH {{baseUrl}}/api/admin/users/{{userId}}/role
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{"role":"admin"}
+
+### 20. Restore demo user role: 200
+PATCH {{baseUrl}}/api/admin/users/{{userId}}/role
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{"role":"user"}
+
+### 21. Cannot demote own administrator: 403
+PATCH {{baseUrl}}/api/admin/users/{{adminId}}/role
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{"role":"user"}

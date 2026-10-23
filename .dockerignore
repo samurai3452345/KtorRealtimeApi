@@ -1,0 +1,14 @@
+.git
+.idea
+.run
+target
+out
+.env
+.env.*
+*.iml
+*.log
+.http-client
+.local
+http-client.private.env.json
+docs
+requests.http
