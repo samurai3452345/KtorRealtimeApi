@@ -88,7 +88,7 @@ docker compose config --quiet
 
 Linux/macOS: `bash ./mvnw -B verify`. Для включения теста с реальным PostgreSQL выполните `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-Postgres.ps1` при запущенной БД.
 
-Локально 23.10.2026 успешно прошли **14 тестов, включая PostgreSQL-интеграцию: 0 ошибок, 0 пропусков**. Проверена конфигурация Compose; Docker runtime локально не проверен из-за сбоя установленного Docker Desktop Secrets Engine (`engine.sock`). CI в `.github/workflows/ci.yml` выполняет тесты с PostgreSQL, собирает и запускает Compose и проверяет HTTP-маршруты; его результат отображается отдельно в GitHub Actions. Подробнее: [docs/TESTING.md](docs/TESTING.md).
+Локально 23.10.2026 успешно прошли **14 тестов, включая PostgreSQL-интеграцию: 0 ошибок, 0 пропусков**. Проверена конфигурация Compose; Docker runtime локально не проверен из-за сбоя установленного Docker Desktop Secrets Engine (`engine.sock`). **Docker проверен в [успешном запуске GitHub Actions](https://github.com/samurai3452345/KtorRealtimeApi/actions/runs/39919586941):** тесты с PostgreSQL, сборка образа, запуск Compose до состояния healthy и HTTP-проверки `/health/ready`, `/swagger`, `/openapi.yaml`. Браузерная проверка охватила чат двух пользователей, роли, приватность уведомлений и размеры экрана 360/390/720/960/1440 px. Подробнее: [docs/TESTING.md](docs/TESTING.md).
 
 ## Репозиторий Git
 
